@@ -34,6 +34,8 @@ class UserGeneratorTestCase(test.TestCase):
     users_per_tenant = 5
     users_num = tenants_num * users_per_tenant
     concurrent = 10
+    tenant_id = "admin"
+    user_id = "admin"
 
     @property
     def context(self):
@@ -43,6 +45,8 @@ class UserGeneratorTestCase(test.TestCase):
                     "tenants": self.tenants_num,
                     "users_per_tenant": self.users_per_tenant,
                     "concurrent": self.concurrent,
+                    "tenant_id": self.tenant_id,
+                    "user_id": self.user_id
                 }
             },
             "admin": {"endpoint": mock.MagicMock()},
