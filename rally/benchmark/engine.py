@@ -132,16 +132,16 @@ class BenchmarkEngine(object):
             "task": self.task,
             "admin": {"endpoint": self.admin_endpoint}
         }
-        with users_ctx.UserGenerator(context) as ctx:
-            ctx.setup()
-            admin = osclients.Clients(self.admin_endpoint)
-            user = osclients.Clients(context["users"][0]["endpoint"])
+        #with users_ctx.UserGenerator(context) as ctx:
+        #    ctx.setup()
+        #    admin = osclients.Clients(self.admin_endpoint)
+        #    user = osclients.Clients(context["users"][0]["endpoint"])
 
-            for name, values in config.iteritems():
-                for pos, kwargs in enumerate(values):
-                    self._validate_config_sematic_helper(admin, user, name,
-                                                         pos, self.task,
-                                                         kwargs)
+        #    for name, values in config.iteritems():
+        #        for pos, kwargs in enumerate(values):
+        #            self._validate_config_sematic_helper(admin, user, name,
+        #                                                 pos, self.task,
+        #                                                 kwargs)
 
     @rutils.log_task_wrapper(LOG.info, _("Task validation."))
     def validate(self):

@@ -62,11 +62,20 @@ class UserGenerator(base.Context):
                 "type": "integer",
                 "minimum": 1
             },
+            "tenant": {
+                "type": "string"
+            },
+            "user": {
+                "type": "string"
+            },
+            "password": {
+                "type": "string"
+            }
         },
         "additionalProperties": False
     }
     PATTERN_TENANT = "ctx_rally_%(task_id)s_tenant_%(iter)i"
-    PATTERN_USER = "ctx_rally_%(tenant_id)s_user_%(uid)d"
+    PATTERN_USER = "ctx_rally_%(tenant)s_user_%(uid)d"
 
     def __init__(self, context):
         super(UserGenerator, self).__init__(context)
@@ -101,9 +110,9 @@ class UserGenerator(base.Context):
 
         LOG.debug("Creating %d users for tenant %s" % (users_num, tenant.id))
 
-        for user_id in range(users_num):
-            username = cls.PATTERN_USER % {"tenant_id": tenant.id,
-                                           "uid": user_id}
+        for user in range(users_num):
+            username = cls.PATTERN_USER % {"tenant": tenant.id,
+                                           "uid": user}
             user = client.users.create(username, "password",
                                        "%s@email.me" % username, tenant.id)
             user_endpoint = endpoint.Endpoint(client.auth_url, user.name,
@@ -112,7 +121,7 @@ class UserGenerator(base.Context):
                                               client.region_name)
             users.append({"id": user.id,
                           "endpoint": user_endpoint,
-                          "tenant_id": tenant.id})
+                          "tenant": tenant.id})
 
         return ({"id": tenant.id, "name": tenant.name}, users)
 
@@ -129,9 +138,9 @@ class UserGenerator(base.Context):
             try:
                 client.tenants.delete(tenant["id"])
             except Exception as ex:
-                LOG.warning("Failed to delete tenant: %(tenant_id)s. "
+                LOG.warning("Failed to delete tenant: %(tenant)s. "
                             "Exception: %(ex)s" %
-                            {"tenant_id": tenant["id"], "ex": ex})
+                            {"tenant": tenant["id"], "ex": ex})
 
     @classmethod
     def _delete_users(cls, args):
@@ -146,13 +155,27 @@ class UserGenerator(base.Context):
             try:
                 client.users.delete(user["id"])
             except Exception as ex:
-                LOG.warning("Failed to delete user: %(user_id)s. "
+                LOG.warning("Failed to delete user: %(user)s. "
                             "Exception: %(ex)s" %
-                            {"user_id": user["id"], "ex": ex})
+                            {"user": user["id"], "ex": ex})
 
     @rutils.log_task_wrapper(LOG.info, _("Enter context: `users`"))
     def setup(self):
         """Create tenants and users, using pool of threads."""
+
+        user = self.config.get("user")
+        password = self.config.get("password")
+        tenant_ks = self.config.get("tenant")
+
+        if user and tenant_ks:
+            client = osclients.Clients(self.endpoint).keystone()
+            user_endpoint = endpoint.Endpoint(client.auth_url, user,
+                                              password, tenant_ks,
+                                              consts.EndpointPermission.USER,
+                                              client.region_name)
+            self.context["users"] = [{"tenant": tenant_ks,
+                                      "endpoint": user_endpoint}]
+            return
 
         users_num = self.config["users_per_tenant"]
 
@@ -169,25 +192,30 @@ class UserGenerator(base.Context):
                 args):
             self.context["tenants"].append(tenant)
             self.context["users"] += users
+        LOG.info("Context users %s threads" % (self.context["users"]))
 
     @rutils.log_task_wrapper(LOG.info, _("Exit context: `users`"))
     def cleanup(self):
         """Delete tenants and users, using pool of threads."""
 
         concurrent = self.config["concurrent"]
+        user = self.config.get("user")
+        tenant = self.config.get("tenant")
 
         # Delete users
-        users_chunks = utils.chunks(self.context["users"], concurrent)
-        utils.run_concurrent(
-            concurrent,
-            UserGenerator,
-            "_delete_users",
-            [(self.endpoint, users) for users in users_chunks])
+        if not user:
+            users_chunks = utils.chunks(self.context["users"], concurrent)
+            utils.run_concurrent(
+                concurrent,
+                UserGenerator,
+                "_delete_users",
+                [(self.endpoint, users) for users in users_chunks])
 
         # Delete tenants
-        tenants_chunks = utils.chunks(self.context["tenants"], concurrent)
-        utils.run_concurrent(
-            concurrent,
-            UserGenerator,
-            "_delete_tenants",
-            [(self.endpoint, tenants) for tenants in tenants_chunks])
+        if not tenant:
+            tenants_chunks = utils.chunks(self.context["tenants"], concurrent)
+            utils.run_concurrent(
+                concurrent,
+                UserGenerator,
+                "_delete_tenants",
+                [(self.endpoint, tenants) for tenants in tenants_chunks])

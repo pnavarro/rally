@@ -68,6 +68,19 @@ class NovaServers(utils.NovaScenario,
         self._delete_server(server)
 
     @valid.add_validator(valid.image_valid_on_flavor("flavor_id", "image_id"))
+    @base.scenario(context={"cleanup": ["nova"]})
+    def boot_and_delete_server_count(self, image_id, flavor_id,
+                               min_sleep=0, max_sleep=0, min_count=1,
+                               max_count=1, **kwargs):
+        """Tests booting and then deleting an image."""
+        kwargs['min_count'] = min_count
+        kwargs['max_count'] = max_count
+        server = self._boot_server(
+            self._generate_random_name(), image_id, flavor_id, **kwargs)
+        self.sleep_between(min_sleep, max_sleep)
+        self._delete_server(server)
+
+    @valid.add_validator(valid.image_valid_on_flavor("flavor_id", "image_id"))
     @base.scenario(context={"cleanup": ["nova", "cinder"]})
     def boot_server_from_volume_and_delete(self, image_id, flavor_id,
                                            volume_size,
